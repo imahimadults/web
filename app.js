@@ -112,6 +112,10 @@ async function startRecording() {
         micSource.connect(analyser);
         updateMeter(analyser);
 
+        // BGMをスピーカーから流すための接続
+        const bgmSource = audioCtx.createMediaElementSource(trackElement);
+        bgmSource.connect(audioCtx.destination);
+
         // 録音開始 (マイクのみ)
         recorder = new MediaRecorder(micStream);
         recordedChunks = [];
