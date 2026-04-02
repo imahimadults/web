@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>シャトルラン録音・合成 | Shuttle Run Recorder</title>
+    <!-- 1. CSSの読み込み -->
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/lamejs@1.2.1/lame.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>えっちなシャトルラン</h1>
+            <p class="subtitle">シャトルランをしながら一人遊び♡</p>
+        </header>
+
+        <main>
+            <!-- A. 音源選択セクション -->
+            <section class="card selection-section">
+                <h2>1. 音源を選ぶ</h2>
+                
+                <!-- リストから選択 -->
+                <div id="track-list" class="track-list">
+                    <!-- JavaScript で動的に生成 -->
+                </div>
+
+                <div class="divider">または</div>
+
+                <!-- 自分でアップロード -->
+                <div class="upload-area">
+                    <label for="audio-upload" class="btn btn-secondary">
+                        <span>📁 自分の音源をアップロード</span>
+                        <input type="file" id="audio-upload" accept="audio/*" hidden>
+                    </label>
+                </div>
+            </section>
+
+            <!-- B. 録音操作セクション -->
+            <section class="card control-section">
+                <div class="status-panel">
+                    <div class="status-indicator">
+                        <span id="pulse-dot" class="pulse-dot"></span>
+                        <span id="status-msg">WAITING</span>
+                    </div>
+                    <div id="record-time" class="timer">00:00</div>
+                    <div id="selected-track-info" class="selected-info">
+                        TRACK: <span id="current-track-name">UNSELECTED</span>
+                    </div>
+                </div>
+
+                <div class="main-controls">
+                    <button id="test-btn" class="btn btn-secondary">TEST</button>
+                    <button id="start-btn" class="btn btn-primary btn-large">START RECORDING</button>
+                </div>
+            </section>
+
+            <!-- C. 設定セクション -->
+            <section id="settings-card" class="card settings-section">
+                <h2>3. 設定</h2>
+                
+
+                <div class="volume-controls">
+                    <div class="volume-item">
+                        <label>マイク感度</label>
+                        <input type="range" id="mic-volume" min="0" max="2" step="0.1" value="1.0">
+                        <span id="mic-vol-val">100%</span>
+                    </div>
+                    <!-- マイクレベルメーター -->
+                    <div class="meter-container">
+                        <div id="mic-meter" class="meter-bar"></div>
+                    </div>
+
+                    <div class="volume-item">
+                        <label>音源（BGM）</label>
+                        <input type="range" id="bgm-volume" min="0" max="2" step="0.1" value="1.0">
+                        <span id="bgm-vol-val">100%</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- D. 結果・ミキサーセクション -->
+            <section id="result-section" class="card hidden">
+                <h2>4. ミキサー（音量調整）</h2>
+                <div class="mixer-panel">
+                    <div class="mixer-item">
+                        <label>記録したマイクの声</label>
+                        <div class="slider-row">
+                            <input type="range" id="mixer-mic-vol" min="0" max="2" step="0.1" value="1.0">
+                            <span id="mixer-mic-val">100%</span>
+                        </div>
+                    </div>
+                    <div class="mixer-item">
+                        <label>シャトルラン音源</label>
+                        <div class="slider-row">
+                            <input type="range" id="mixer-bgm-vol" min="0" max="2" step="0.1" value="0.6">
+                            <span id="mixer-bgm-val">60%</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="preview-controls">
+                    <button id="play-preview-btn" class="btn btn-secondary">▶ プレビュー再生</button>
+                    <button id="export-mp3-btn" class="btn btn-success">⬇ MP3を作成・保存</button>
+                </div>
+
+                <div id="export-progress-container" class="hidden">
+                    <div class="progress-label">MP3変換中... <span id="export-percent">0%</span></div>
+                    <div class="meter-container">
+                        <div id="export-progress-bar" class="meter-bar" style="width: 0%"></div>
+                    </div>
+                </div>
+
+                <div class="action-area" style="margin-top: 20px;">
+                    <button id="retake-btn" class="btn btn-secondary" style="width: 100%;">
+                        ↺ 録音を捨てて最初からやり直す
+                    </button>
+                </div>
+            </section>
+        </main>
+
+        <footer>
+            <p>&copy; 2026 シャトルラン録音ツール | HTTPS環境とマイク権限が必要です。</p>
+        </footer>
+    </div>
+
+    <!-- 2. 音源データとアプリロジックの読み込み -->
+    <script src="tracks.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>

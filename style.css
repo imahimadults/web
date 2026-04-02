@@ -1,0 +1,357 @@
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@700&family=Outfit:wght@300;400;600&display=swap');
+
+:root {
+    --neon-pink: #ff2d7a;
+    --neon-pink-glow: rgba(255, 45, 122, 0.4);
+    --neon-violet: #8b5cf6;
+    --neon-violet-glow: rgba(139, 92, 246, 0.3);
+    --midnight: #050505;
+    --deep-slate: #0a0a0c;
+    --glass-bg: rgba(20, 20, 25, 0.7);
+    --glass-border: rgba(255, 45, 122, 0.15);
+    --text-primary: #ffffff;
+    --text-muted: #94a3b8;
+    --danger: #ff4d4d;
+    --success: #00ffaa;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    font-family: 'Outfit', sans-serif;
+}
+
+body {
+    background-color: var(--midnight);
+    /* 妖艶なグラデーション背景 */
+    background-image: 
+        radial-gradient(circle at 10% 20%, rgba(139, 92, 246, 0.05) 0%, transparent 40%),
+        radial-gradient(circle at 90% 80%, rgba(255, 45, 122, 0.05) 0%, transparent 40%);
+    color: var(--text-primary);
+    line-height: 1.6;
+    padding: 20px;
+    min-height: 100vh;
+}
+
+.container {
+    max-width: 500px; /* よりスリムに */
+    margin: 40px auto;
+}
+
+header {
+    text-align: center;
+    margin-bottom: 40px;
+}
+
+h1 {
+    font-family: 'Montserrat', sans-serif;
+    font-size: 2.2rem;
+    letter-spacing: -1px;
+    margin-bottom: 8px;
+    background: linear-gradient(135deg, var(--neon-pink), var(--neon-violet));
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    text-shadow: 0 0 30px rgba(255, 45, 122, 0.2);
+}
+
+.subtitle {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+}
+
+/* Glassmorphism Card */
+.card {
+    background: var(--glass-bg);
+    backdrop-filter: blur(15px);
+    -webkit-backdrop-filter: blur(15px);
+    border: 1px solid var(--glass-border);
+    border-radius: 24px;
+    padding: 25px;
+    margin-bottom: 24px;
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.8);
+    transition: box-shadow 0.3s, border-color 0.3s;
+}
+
+.card:hover {
+    border-color: rgba(255, 45, 122, 0.3);
+    box-shadow: 0 8px 32px 0 rgba(255, 45, 122, 0.1);
+}
+
+h2 {
+    font-size: 0.9rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    margin-bottom: 20px;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+h2::before {
+    content: "";
+    width: 4px;
+    height: 16px;
+    background: var(--neon-pink);
+    border-radius: 2px;
+}
+
+/* Track Items */
+.track-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.track-item {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 12px;
+    padding: 15px;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.track-item:hover {
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.track-item.selected {
+    border-color: var(--neon-pink);
+    background: rgba(255, 45, 122, 0.08);
+    box-shadow: 0 0 20px rgba(255, 45, 122, 0.15);
+}
+
+.track-title {
+    font-weight: 600;
+    font-size: 1rem;
+    color: var(--text-primary);
+}
+
+.track-desc {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    display: block;
+    margin-top: 4px;
+}
+
+/* Control Section */
+.status-panel {
+    text-align: center;
+    padding: 10px 0;
+}
+
+.selected-info {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+
+#current-track-name {
+    color: var(--neon-pink);
+    font-weight: bold;
+}
+
+.timer {
+    font-family: 'Montserrat', sans-serif;
+    font-size: 4.5rem; /* 大胆に大きく */
+    font-weight: 700;
+    margin: 15px 0;
+    color: #fff;
+    text-shadow: 0 0 20px rgba(255, 255, 255, 0.2);
+}
+
+.status-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+    color: var(--neon-pink);
+}
+
+/* 呼吸するようなパルスアニメーション */
+.pulse-dot {
+    width: 10px;
+    height: 10px;
+    background-color: var(--neon-pink);
+    border-radius: 50%;
+    display: inline-block;
+}
+
+.recording .pulse-dot {
+    animation: heart-pulse 1.2s infinite ease-in-out;
+}
+
+@keyframes heart-pulse {
+    0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255, 45, 122, 0.6); }
+    70% { transform: scale(1.4); box-shadow: 0 0 0 15px rgba(255, 45, 122, 0); }
+    100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255, 45, 122, 0); }
+}
+
+/* Buttons */
+.main-controls {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 15px;
+    margin-top: 25px;
+}
+
+@media (min-width: 400px) {
+    .main-controls { grid-template-columns: auto 1fr; }
+}
+
+.btn {
+    border-radius: 14px;
+    font-weight: 600;
+    padding: 14px 20px;
+    cursor: pointer;
+    transition: all 0.3s;
+    border: none;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-size: 0.85rem;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, var(--neon-pink), var(--neon-violet));
+    color: white;
+    box-shadow: 0 4px 15px var(--neon-pink-glow);
+}
+
+.btn-primary:active { transform: scale(0.96); }
+
+.btn-secondary {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-primary);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.btn-danger {
+    background: var(--danger);
+    color: white;
+    box-shadow: 0 4px 15px rgba(255, 77, 77, 0.3);
+}
+
+.btn-success {
+    background: linear-gradient(135deg, #00f2fe, #4facfe);
+    color: white;
+    box-shadow: 0 4px 15px rgba(79, 172, 254, 0.3);
+}
+
+/* Volume Sliders */
+.volume-controls {
+    display: grid;
+    gap: 20px;
+}
+
+.volume-item {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.volume-item label {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+.slider-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    flex: 1;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 2px;
+    outline: none;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    background: var(--neon-pink);
+    border-radius: 50%;
+    cursor: pointer;
+    box-shadow: 0 0 10px var(--neon-pink-glow);
+    border: 2px solid white;
+}
+
+/* Meter */
+.meter-container {
+    height: 4px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 2px;
+    overflow: hidden;
+    margin-top: 5px;
+}
+
+.meter-bar {
+    height: 100%;
+    width: 0%;
+    background: var(--neon-pink);
+    box-shadow: 0 0 10px var(--neon-pink-glow);
+    transition: width 0.05s;
+}
+
+/* Mixer Styles */
+.mixer-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    margin-bottom: 30px;
+    background: rgba(0, 0, 0, 0.2);
+    padding: 20px;
+    border-radius: 16px;
+}
+
+.mixer-item label {
+    font-size: 0.8rem;
+    color: var(--neon-pink);
+    font-weight: 600;
+    margin-bottom: 8px;
+    display: block;
+}
+
+.preview-controls {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+#export-progress-container {
+    margin-top: 25px;
+    padding: 15px;
+    border: 1px solid var(--glass-border);
+    border-radius: 12px;
+}
+
+.progress-label {
+    font-size: 0.8rem;
+    text-align: center;
+    margin-bottom: 8px;
+}
+
+.progress-label span {
+    color: var(--neon-pink);
+    font-weight: bold;
+}
+
+footer {
+    text-align: center;
+    opacity: 0.4;
+    font-size: 0.7rem;
+    margin-top: 60px;
+}
+
+.hidden { display: none; }
