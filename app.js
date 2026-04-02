@@ -49,6 +49,7 @@ const micVolSlider = document.getElementById('mic-volume');
 const bgmVolSlider = document.getElementById('bgm-volume');
 const micVolValEl = document.getElementById('mic-vol-val');
 const bgmVolValEl = document.getElementById('bgm-vol-val');
+const monitorMicCheckbox = document.getElementById('monitor-mic');
 
 // ミキサーUI
 const mixerMicVol = document.getElementById('mixer-mic-vol');
@@ -122,6 +123,17 @@ function updateRealtimeVolume() {
     bgmVolValEl.textContent = Math.round(bgmVal * 100) + "%";
 }
 
+function syncMicMonitoring() {
+    if (!micGainNode || !audioCtx) return;
+    
+    if (monitorMicCheckbox.checked && (isRecording || isTestMode)) {
+        // すでに接続されている場合は一旦切断して再接続（二重接続防止）
+        try { micGainNode.connect(audioCtx.destination); } catch(e) {}
+    } else {
+        try { micGainNode.disconnect(audioCtx.destination); } catch(e) {}
+    }
+}
+
 // --- 6. 録音処理 ---
 async function startRecording() {
     if (!trackElement.src) return alert("音源を選んでね♡");
@@ -139,6 +151,8 @@ async function startRecording() {
         micSource.connect(micGainNode);
         micGainNode.connect(analyser); // メーターには感度反映後の信号を送る
         updateMeter(analyser);
+        
+        syncMicMonitoring();
 
         // BGM設定（音量調整用GainNodeを挟む）
         if (!bgmMediaSource) {
@@ -199,8 +213,9 @@ async function startTestMode() {
         
         testMicSource.connect(micGainNode);
         micGainNode.connect(analyser);
-        micGainNode.connect(audioCtx.destination); // テスト中のみスピーカーに回す
         updateMeter(analyser);
+        
+        syncMicMonitoring();
 
         // テスト用接続: BGM -> Gain -> Destination
         trackElement.currentTime = 0;
@@ -226,6 +241,7 @@ async function startTestMode() {
 
 function stopTestMode() {
     if (testMicSource) { testMicSource.disconnect(); testMicSource = null; }
+    if (micGainNode) { try { micGainNode.disconnect(audioCtx.destination); } catch(e) {} }
     trackElement.pause();
     isTestMode = false;
     testBtn.textContent = "TEST";
@@ -234,8 +250,10 @@ function stopTestMode() {
 }
 
 async function stopRecording() {
-    if (!isRecording) return;
-    recorder.stop();
+    if (isRecording) {
+        recorder.stop();
+        if (micGainNode) { try { micGainNode.disconnect(audioCtx.destination); } catch(e) {} }
+    }
     trackElement.pause();
     isRecording = false;
     document.body.classList.remove('recording');
@@ -464,3 +482,4 @@ mixerBgmVol.oninput = updatePreviewVolume;
 // リアルタイム設定反映
 micVolSlider.oninput = updateRealtimeVolume;
 bgmVolSlider.oninput = updateRealtimeVolume;
+monitorMicCheckbox.onchange = syncMicMonitoring;
