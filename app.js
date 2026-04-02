@@ -26,6 +26,12 @@ let timerInterval = null;
 let wakeLock = null;
 let isTestMode = false;
 
+// リアルタイム制御用
+let micGainNode = null;
+let bgmGainNode = null;
+let testMicSource = null;
+let testBgmSource = null;
+
 // --- 2. UI要素 ---
 const trackListEl = document.getElementById('track-list');
 const audioUploadInput = document.getElementById('audio-upload');
@@ -37,6 +43,12 @@ const retakeBtn = document.getElementById('retake-btn');
 const recordTimeEl = document.getElementById('record-time');
 const statusMsgEl = document.getElementById('status-msg');
 const micMeterEl = document.getElementById('mic-meter');
+
+// 設定UI
+const micVolSlider = document.getElementById('mic-volume');
+const bgmVolSlider = document.getElementById('bgm-volume');
+const micVolValEl = document.getElementById('mic-vol-val');
+const bgmVolValEl = document.getElementById('bgm-vol-val');
 
 // ミキサーUI
 const mixerMicVol = document.getElementById('mixer-mic-vol');
@@ -98,7 +110,19 @@ async function getMicStream() {
     });
 }
 
-// --- 5. 録音処理 ---
+// --- 5. ボリューム制御 ---
+function updateRealtimeVolume() {
+    const micVal = parseFloat(micVolSlider.value);
+    const bgmVal = parseFloat(bgmVolSlider.value);
+    
+    if (micGainNode) micGainNode.gain.setTargetAtTime(micVal, audioCtx.currentTime, 0.01);
+    if (bgmGainNode) bgmGainNode.gain.setTargetAtTime(bgmVal, audioCtx.currentTime, 0.01);
+    
+    micVolValEl.textContent = Math.round(micVal * 100) + "%";
+    bgmVolValEl.textContent = Math.round(bgmVal * 100) + "%";
+}
+
+// --- 6. 録音処理 ---
 async function startRecording() {
     if (!trackElement.src) return alert("音源を選んでね♡");
 
@@ -107,17 +131,23 @@ async function startRecording() {
         if (audioCtx.state === 'suspended') await audioCtx.resume();
         micStream = await getMicStream();
 
-        // メーター用
+        // マイク入力設定（感度調整用GainNodeを挟む）
         micSource = audioCtx.createMediaStreamSource(micStream);
+        micGainNode = audioCtx.createGain();
         const analyser = audioCtx.createAnalyser();
-        micSource.connect(analyser);
+        
+        micSource.connect(micGainNode);
+        micGainNode.connect(analyser); // メーターには感度反映後の信号を送る
         updateMeter(analyser);
 
-        // BGMをスピーカーから流すための接続 (重複生成を防ぐ)
+        // BGM設定（音量調整用GainNodeを挟む）
         if (!bgmMediaSource) {
             bgmMediaSource = audioCtx.createMediaElementSource(trackElement);
         }
-        bgmMediaSource.connect(audioCtx.destination);
+        bgmGainNode = audioCtx.createGain();
+        bgmMediaSource.connect(bgmGainNode).connect(audioCtx.destination);
+        
+        updateRealtimeVolume();
 
         // 録音開始 (マイクのみ)
         recorder = new MediaRecorder(micStream);
@@ -142,6 +172,65 @@ async function startRecording() {
         console.error(err);
         alert("マイクが使えないみたい...");
     }
+}
+
+async function toggleTestMode() {
+    if (isRecording) return;
+
+    if (isTestMode) {
+        stopTestMode();
+    } else {
+        await startTestMode();
+    }
+}
+
+async function startTestMode() {
+    if (!trackElement.src) return alert("音源を選んでね♡");
+    
+    try {
+        await initAudioContext();
+        if (audioCtx.state === 'suspended') await audioCtx.resume();
+        micStream = await getMicStream();
+
+        // テスト用接続: Mic -> Gain -> Destination (モニター)
+        testMicSource = audioCtx.createMediaStreamSource(micStream);
+        micGainNode = audioCtx.createGain();
+        const analyser = audioCtx.createAnalyser();
+        
+        testMicSource.connect(micGainNode);
+        micGainNode.connect(analyser);
+        micGainNode.connect(audioCtx.destination); // テスト中のみスピーカーに回す
+        updateMeter(analyser);
+
+        // テスト用接続: BGM -> Gain -> Destination
+        trackElement.currentTime = 0;
+        if (!bgmMediaSource) {
+            bgmMediaSource = audioCtx.createMediaElementSource(trackElement);
+        }
+        bgmGainNode = audioCtx.createGain();
+        bgmMediaSource.connect(bgmGainNode).connect(audioCtx.destination);
+        
+        updateRealtimeVolume();
+        trackElement.play();
+
+        isTestMode = true;
+        testBtn.textContent = "STOP TEST";
+        testBtn.classList.add('btn-danger');
+        statusMsgEl.textContent = "TESTING...";
+        
+    } catch (err) {
+        console.error(err);
+        alert("テスト開始に失敗したよ...");
+    }
+}
+
+function stopTestMode() {
+    if (testMicSource) { testMicSource.disconnect(); testMicSource = null; }
+    trackElement.pause();
+    isTestMode = false;
+    testBtn.textContent = "TEST";
+    testBtn.classList.remove('btn-danger');
+    statusMsgEl.textContent = "WAITING";
 }
 
 async function stopRecording() {
@@ -360,9 +449,18 @@ function resetRecording() {
 }
 
 // イベント
-startBtn.onclick = () => { if (isRecording) stopRecording(); else startRecording(); };
+startBtn.onclick = () => {
+    if (isTestMode) stopTestMode();
+    if (isRecording) stopRecording(); 
+    else startRecording(); 
+};
+testBtn.onclick = toggleTestMode;
 retakeBtn.onclick = resetRecording;
 playPreviewBtn.onclick = togglePreview;
 exportMp3Btn.onclick = exportMP3;
 mixerMicVol.oninput = updatePreviewVolume;
 mixerBgmVol.oninput = updatePreviewVolume;
+
+// リアルタイム設定反映
+micVolSlider.oninput = updateRealtimeVolume;
+bgmVolSlider.oninput = updateRealtimeVolume;
