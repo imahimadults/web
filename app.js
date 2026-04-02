@@ -259,7 +259,7 @@ async function exportMP3() {
 function encodeToMp3(audioBuffer) {
     const channels = 2;
     const sampleRate = audioBuffer.sampleRate;
-    const mp3encoder = new lamejs.Mp3Encoder(channels, sampleRate, 128);
+    const mp3encoder = new lamejs.Mp3Encoder(channels, sampleRate, 64); // 8MB制限のため 64kbps に圧縮
     const mp3Data = [];
 
     const left = audioBuffer.getChannelData(0);
