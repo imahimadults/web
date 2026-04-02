@@ -10,6 +10,7 @@ let trackElement = new Audio(); // BGM再生用
 let recorder = null;
 let recordedChunks = [];
 let recordedMicBuffer = null; // 録音されたマイクのAudioBuffer
+let bgmMediaSource = null;    // MediaElementSourceの重複生成防止用
 
 // 再生同期用
 let previewMicSource = null;
@@ -112,9 +113,11 @@ async function startRecording() {
         micSource.connect(analyser);
         updateMeter(analyser);
 
-        // BGMをスピーカーから流すための接続
-        const bgmSource = audioCtx.createMediaElementSource(trackElement);
-        bgmSource.connect(audioCtx.destination);
+        // BGMをスピーカーから流すための接続 (重複生成を防ぐ)
+        if (!bgmMediaSource) {
+            bgmMediaSource = audioCtx.createMediaElementSource(trackElement);
+        }
+        bgmMediaSource.connect(audioCtx.destination);
 
         // 録音開始 (マイクのみ)
         recorder = new MediaRecorder(micStream);
@@ -234,9 +237,10 @@ async function exportMP3() {
     const bgmArrayBuffer = await bgmResponse.arrayBuffer();
     const bgmBuffer = await audioCtx.decodeAudioData(bgmArrayBuffer);
 
-    // オフラインレンダリング (高速ミックス)
+    // オフラインレンダリング (高速ミックス / システムのサンプリングレートに合わせる)
     const duration = Math.max(recordedMicBuffer.duration, bgmBuffer.duration);
-    const offlineCtx = new OfflineAudioContext(2, 44100 * duration, 44100);
+    const sampleRate = audioCtx.sampleRate;
+    const offlineCtx = new OfflineAudioContext(2, Math.ceil(sampleRate * duration), sampleRate);
 
     const micSource = offlineCtx.createBufferSource();
     micSource.buffer = recordedMicBuffer;
@@ -263,18 +267,20 @@ async function exportMP3() {
 function encodeToMp3(audioBuffer) {
     const channels = 2;
     const sampleRate = audioBuffer.sampleRate;
-    const mp3encoder = new lamejs.Mp3Encoder(channels, sampleRate, 64); // 8MB制限のため 64kbps に圧縮
+    const mp3encoder = new lamejs.Mp3Encoder(channels, sampleRate, 128); // 128kbps で安定性を向上
     const mp3Data = [];
 
     const left = audioBuffer.getChannelData(0);
     const right = audioBuffer.getChannelData(1);
     
-    // Float32 -> Int16
+    // Float32 -> Int16 (クリッピングを考慮して堅牢に変換)
     const leftInt = new Int16Array(left.length);
     const rightInt = new Int16Array(right.length);
     for (let i = 0; i < left.length; i++) {
-        leftInt[i] = left[i] < 0 ? left[i] * 32768 : left[i] * 32767;
-        rightInt[i] = right[i] < 0 ? right[i] * 32768 : right[i] * 32767;
+        const sL = Math.max(-1, Math.min(1, left[i]));
+        const sR = Math.max(-1, Math.min(1, right[i]));
+        leftInt[i] = sL < 0 ? sL * 32768 : sL * 32767;
+        rightInt[i] = sR < 0 ? sR * 32768 : sR * 32767;
     }
 
     const sampleBlockSize = 1152;
@@ -293,7 +299,7 @@ function encodeToMp3(audioBuffer) {
     const mp3buf = mp3encoder.flush();
     if (mp3buf.length > 0) mp3Data.push(mp3buf);
 
-    const blob = new Blob(mp3Data, { type: 'audio/mp3' });
+    const blob = new Blob(mp3Data, { type: 'audio/mpeg' });
     const url = URL.createObjectURL(blob);
     
     // ダウンロード実行
