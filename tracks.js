@@ -15,33 +15,17 @@
 
 const presetTracks = [
     {
-        id: "play-mode-01",
-        title: "基本のシャトルランプレイ",
-        url: "assets/shuttle_run_20m.mp3",
-        description: "お題に従って遊んでね♡ 基本の20mコースです。"
+        id: "git1",
+        title: "シャトルランチャレンジ",
+        url: "assets/git1.mp3",
+        description: "基本コースです。"
     },
     {
-        id: "play-mode-02",
-        title: "指示待ちおねだり録音",
-        url: "assets/instruction_play.mp3",
-        description: "ゆっくりとお題を聞きながら声を録ってね。"
-    },
-    {
-        id: "play-mode-03",
-        title: "激しく挑戦！限界シャトルラン",
-        url: "assets/hard_limit.mp3",
-        description: "テンポが次第に速くなります…ついてこれるかな？"
-    },
-    
-    /* 
-    【テンプレート：ここをコピーして追加できます】
-    {
-        id: "new-track-01",
-        title: "ここにタイトルを書く",
-        url: "assets/your-file.mp3",
-        description: "ここに説明文を書く♡"
-    },
-    */
+        id: "git2",
+        title: "お題作成",
+        url: "assets/git2.mp3",
+        description: "オリジナルのお題を作りたい方はこちら"
+    }
 ];
 
 // 他のスクリプトから参照できるようにグローバルに公開
