@@ -179,8 +179,11 @@ function updateRealtimeVolume() {
 function syncMicMonitoring() {
     if (!micGainNode || !audioCtx) return;
     
+    // 万が一、ボタンが見つからなくてもアプリが止まらないように安全な書き方にします
+    const isChecked = monitorMicCheckbox ? monitorMicCheckbox.checked : false;
+    
     // 自分の声をスピーカーから出す設定
-    if (monitorMicCheckbox.checked && (isRecording || isTestMode)) {
+    if (isChecked && (isRecording || isTestMode)) {
         try { micGainNode.connect(audioCtx.destination); } catch(e) {}
     } else {
         try { micGainNode.disconnect(audioCtx.destination); } catch(e) {}
@@ -629,4 +632,5 @@ mixerBgmVol.oninput = updatePreviewVolume;
 // リアルタイム設定反映
 micVolSlider.oninput = updateRealtimeVolume;
 bgmVolSlider.oninput = updateRealtimeVolume;
-monitorMicCheckbox.onchange = syncMicMonitoring;
+// ボタンが見つかったときだけイベントを設定します
+if (monitorMicCheckbox) monitorMicCheckbox.onchange = syncMicMonitoring;

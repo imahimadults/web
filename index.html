@@ -112,6 +112,15 @@
                         <input type="range" id="bgm-volume" min="0" max="2" step="0.1" value="1.0">
                         <span id="bgm-vol-val">100%</span>
                     </div>
+
+                    <!-- モニター切り替え：エラー回避と機能追加 -->
+                    <div class="volume-item checkbox-item">
+                        <label>
+                            <input type="checkbox" id="monitor-mic">
+                            自分の声をイヤホンで聴く（モニター）
+                        </label>
+                        <span class="step-note" style="display:block; font-size: 0.8rem; opacity: 0.8;">※ハウリング防止のため、イヤホンを強く推奨します。</span>
+                    </div>
                 </div>
             </section>
 
