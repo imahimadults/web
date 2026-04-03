@@ -62,8 +62,16 @@ const exportProgressContainer = document.getElementById('export-progress-contain
 const exportProgressBar = document.getElementById('export-progress-bar');
 const exportPercentEl = document.getElementById('export-percent');
 
-// --- 3. 初期化 ---
+// --- 3. 初期化（アプリが読み込まれたときの準備） ---
 window.onload = () => {
+    // 互換性チェック
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        alert("お使いのブラウザはマイク録音に対応していないか、HTTPS接続ではありません。別のブラウザ（Safari, Chromeなど）を試してみてね。");
+    }
+    if (typeof MediaRecorder === 'undefined') {
+        console.warn("MediaRecorder is not supported in this browser.");
+    }
+
     presetTracks.forEach(track => {
         const item = document.createElement('div');
         item.className = 'track-item';
@@ -94,28 +102,73 @@ audioUploadInput.onchange = (e) => {
     }
 };
 
-// --- 4. 音声エンジン ---
+// --- 4. 音声エンジン（ブラウザの音を扱うコア部分） ---
+/**
+ * AudioContext（音のキャンバスのようなもの）を初期化します。
+ * ブラウザのセキュリティ制限により、ユーザーがボタンを押した直後に実行する必要があります。
+ */
 async function initAudioContext() {
-    if (!audioCtx) {
-        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    try {
+        if (!audioCtx) {
+            // iOS Safariや古いブラウザ向けの互換性対応
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        // 音声エンジンが止まっている（suspended）場合は再開させます
+        if (audioCtx.state === 'suspended') {
+            await audioCtx.resume();
+        }
+    } catch (e) {
+        console.error("AudioContext init error:", e);
+        throw new Error("音声エンジンの起動に失敗しました。ブラウザの設定を確認してください。");
     }
 }
 
+/**
+ * 録音に使用するマイクの許可を取り、音声ストリームを取得します。
+ * iOSなどのモバイル端末でも動作しやすいよう、シンプルな設定にしています。
+ */
 async function getMicStream() {
-    return await navigator.mediaDevices.getUserMedia({
+    const constraints = {
         audio: {
-            echoCancellation: false,
-            noiseSuppression: false,
-            autoGainControl: false // 自動補正オフ
+            echoCancellation: false, // エコー除去をオフ（本来の声を録るため）
+            noiseSuppression: false, // ノイズ抑制をオフ
+            autoGainControl: false   // 自動音量調整をオフ
         }
-    });
+    };
+    try {
+        return await navigator.mediaDevices.getUserMedia(constraints);
+    } catch (e) {
+        console.error("getUserMedia error:", e);
+        throw new Error("マイクの使用が許可されていないか、他のアプリで使われている可能性があります。");
+    }
 }
 
-// --- 5. ボリューム制御 ---
+/**
+ * 録音に使用する最適なファイル形式をブラウザに合わせて選びます。
+ * iOS Safariでは 'audio/mp4' が、他では 'audio/webm' が適しています。
+ */
+function getSupportedMimeType() {
+    const types = [
+        'audio/webm;codecs=opus',
+        'audio/mp4',
+        'audio/aac',
+        'audio/ogg;codecs=opus'
+    ];
+    for (const type of types) {
+        if (MediaRecorder.isTypeSupported(type)) {
+            console.log("Selected MIME type:", type);
+            return type;
+        }
+    }
+    return ''; // ブラウザのデフォルトを使用
+}
+
+// --- 5. ボリューム制御（音量スライダーの反映） ---
 function updateRealtimeVolume() {
     const micVal = parseFloat(micVolSlider.value);
     const bgmVal = parseFloat(bgmVolSlider.value);
     
+    // スライダーの値を徐々に反映させて、プツプツ音（クリックノイズ）を防ぎます
     if (micGainNode) micGainNode.gain.setTargetAtTime(micVal, audioCtx.currentTime, 0.01);
     if (bgmGainNode) bgmGainNode.gain.setTargetAtTime(bgmVal, audioCtx.currentTime, 0.01);
     
@@ -126,8 +179,8 @@ function updateRealtimeVolume() {
 function syncMicMonitoring() {
     if (!micGainNode || !audioCtx) return;
     
+    // 自分の声をスピーカーから出す設定
     if (monitorMicCheckbox.checked && (isRecording || isTestMode)) {
-        // すでに接続されている場合は一旦切断して再接続（二重接続防止）
         try { micGainNode.connect(audioCtx.destination); } catch(e) {}
     } else {
         try { micGainNode.disconnect(audioCtx.destination); } catch(e) {}
@@ -135,26 +188,33 @@ function syncMicMonitoring() {
 }
 
 // --- 6. 録音処理 ---
+/**
+ * 録音を開始します。
+ * iOS対策として、AudioContextのレジューム、マイク取得、BGM再生をひとつのボタン操作内で行います。
+ */
 async function startRecording() {
     if (!trackElement.src) return alert("音源を選んでね♡");
 
     try {
+        // 1. エンジンの準備
         await initAudioContext();
-        if (audioCtx.state === 'suspended') await audioCtx.resume();
+        
+        // 2. マイクの準備
         micStream = await getMicStream();
 
-        // マイク入力設定（感度調整用GainNodeを挟む）
+        // 3. 録音ノードの組み立て
         micSource = audioCtx.createMediaStreamSource(micStream);
         micGainNode = audioCtx.createGain();
         const analyser = audioCtx.createAnalyser();
         
         micSource.connect(micGainNode);
-        micGainNode.connect(analyser); // メーターには感度反映後の信号を送る
-        updateMeter(analyser);
+        micGainNode.connect(analyser);
+        updateMeter(analyser); // メーター表示開始
         
         syncMicMonitoring();
 
-        // BGM設定（音量調整用GainNodeを挟む）
+        // 4. BGM（選んだ音楽）の設定
+        // MediaElementSource は一度だけ作る必要があります
         if (!bgmMediaSource) {
             bgmMediaSource = audioCtx.createMediaElementSource(trackElement);
         }
@@ -163,15 +223,22 @@ async function startRecording() {
         
         updateRealtimeVolume();
 
-        // 録音開始 (マイクのみ)
-        recorder = new MediaRecorder(micStream);
+        // 5. 録音機（MediaRecorder）の設定
+        const options = { mimeType: getSupportedMimeType() };
+        recorder = new MediaRecorder(micStream, options);
         recordedChunks = [];
+        
+        // デー夕が届くたびに保存
         recorder.ondataavailable = e => { if (e.data.size > 0) recordedChunks.push(e.data); };
+        // 停止したときの処理を予約
         recorder.onstop = processRecordedAudio;
 
+        // 6. 録音と再生を同時に開始！
         recorder.start();
         trackElement.currentTime = 0;
-        trackElement.play();
+        
+        // iOSでは play() がPromiseを返すので、念のため完了を待ちます
+        await trackElement.play();
 
         isRecording = true;
         document.body.classList.add('recording');
@@ -179,15 +246,20 @@ async function startRecording() {
         startTimer();
         statusMsgEl.textContent = "RECORDING...";
 
-        // WakeLock
-        if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen').catch(()=>{});
+        // スマホが途中でスリープしないようにする設定
+        if ('wakeLock' in navigator) {
+            try { wakeLock = await navigator.wakeLock.request('screen'); } catch(e){}
+        }
 
     } catch (err) {
-        console.error(err);
-        alert("マイクが使えないみたい...");
+        console.error("Start recording error:", err);
+        alert("失敗しちゃったみたい: " + err.message);
     }
 }
 
+/**
+ * テストモードのオンオフを切り替えます。
+ */
 async function toggleTestMode() {
     if (isRecording) return;
 
@@ -198,26 +270,33 @@ async function toggleTestMode() {
     }
 }
 
+/**
+ * テストモードを開始します。
+ * 本番の録音はせずに、マイクの音量やBGMとのバランスを確認できます。
+ */
 async function startTestMode() {
     if (!trackElement.src) return alert("音源を選んでね♡");
     
     try {
+        // 1. エンジンの準備
         await initAudioContext();
-        if (audioCtx.state === 'suspended') await audioCtx.resume();
+        
+        // 2. マイクの準備
         micStream = await getMicStream();
 
-        // テスト用接続: Mic -> Gain -> Destination (モニター)
+        // 3. テスト用の接続作り
+        // マイク -> 音量調整(micGainNode) -> 出力(destination)
         testMicSource = audioCtx.createMediaStreamSource(micStream);
         micGainNode = audioCtx.createGain();
         const analyser = audioCtx.createAnalyser();
         
         testMicSource.connect(micGainNode);
         micGainNode.connect(analyser);
-        updateMeter(analyser);
+        updateMeter(analyser); // メーターを動かす
         
         syncMicMonitoring();
 
-        // テスト用接続: BGM -> Gain -> Destination
+        // 4. BGM（音楽）の接続
         trackElement.currentTime = 0;
         if (!bgmMediaSource) {
             bgmMediaSource = audioCtx.createMediaElementSource(trackElement);
@@ -226,7 +305,9 @@ async function startTestMode() {
         bgmMediaSource.connect(bgmGainNode).connect(audioCtx.destination);
         
         updateRealtimeVolume();
-        trackElement.play();
+        
+        // 5. 再生開始
+        await trackElement.play();
 
         isTestMode = true;
         testBtn.textContent = "STOP TEST";
@@ -234,11 +315,14 @@ async function startTestMode() {
         statusMsgEl.textContent = "TESTING...";
         
     } catch (err) {
-        console.error(err);
-        alert("テスト開始に失敗したよ...");
+        console.error("Start test mode error:", err);
+        alert("テスト開始に失敗したよ: " + err.message);
     }
 }
 
+/**
+ * テストモードを停止します。
+ */
 function stopTestMode() {
     if (testMicSource) { testMicSource.disconnect(); testMicSource = null; }
     if (micGainNode) { try { micGainNode.disconnect(audioCtx.destination); } catch(e) {} }
@@ -263,16 +347,33 @@ async function stopRecording() {
     if (wakeLock) { wakeLock.release(); wakeLock = null; }
 }
 
+/**
+ * 録音が終わったあとに、録音データを編集可能な形式（AudioBuffer）に変換します。
+ */
 async function processRecordedAudio() {
-    const blob = new Blob(recordedChunks);
-    const arrayBuffer = await blob.arrayBuffer();
-    recordedMicBuffer = await audioCtx.decodeAudioData(arrayBuffer);
-    
-    // ミキサー表示
-    resultSection.classList.remove('hidden');
-    statusMsgEl.textContent = "READY TO MIX";
-    // 自動スクロール
-    resultSection.scrollIntoView({ behavior: 'smooth' });
+    statusMsgEl.textContent = "音声を解析中...";
+    try {
+        // 録音されたデータの断片をひとつにまとめます
+        const blob = new Blob(recordedChunks);
+        const arrayBuffer = await blob.arrayBuffer();
+        
+        // iOS対策：デコード（解析）の前に音声エンジンが動いていることを確認します
+        await initAudioContext();
+        
+        // 音声データとして読み込みます
+        recordedMicBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+        
+        // ミキサー画面を表示します
+        resultSection.classList.remove('hidden');
+        statusMsgEl.textContent = "READY TO MIX";
+        
+        // ミキサーが見えるように自動でスクロールします
+        resultSection.scrollIntoView({ behavior: 'smooth' });
+    } catch (e) {
+        console.error("Process audio error:", e);
+        alert("録音データの解析に失敗しました。もう一度試してみてください。");
+        statusMsgEl.textContent = "ERROR";
+    }
 }
 
 // --- 6. プレビュー & ミキサー制御 ---
@@ -291,99 +392,141 @@ async function togglePreview() {
     }
 }
 
+/**
+ * ミキサーでのプレビュー再生を開始します。
+ */
 async function startPreview() {
     if (!recordedMicBuffer) return;
-    await initAudioContext();
     
-    // BGMの音源を取得 (trackElementから直接ではなく、Bufferとして読み込む)
-    const bgmResponse = await fetch(trackElement.src);
-    const bgmArrayBuffer = await bgmResponse.arrayBuffer();
-    const bgmBuffer = await audioCtx.decodeAudioData(bgmArrayBuffer);
+    try {
+        // エンジンの準備
+        await initAudioContext();
+        
+        // BGMの音源を再取得して、マイクの声とタイミングを合わせます
+        statusMsgEl.textContent = "素材を準備中...";
+        const bgmResponse = await fetch(trackElement.src);
+        const bgmArrayBuffer = await bgmResponse.arrayBuffer();
+        const bgmBuffer = await audioCtx.decodeAudioData(bgmArrayBuffer);
 
-    // ソース作成
-    previewMicSource = audioCtx.createBufferSource();
-    previewMicSource.buffer = recordedMicBuffer;
-    previewBgmSource = audioCtx.createBufferSource();
-    previewBgmSource.buffer = bgmBuffer;
+        // 再生用のソース（音を出すノード）を作成
+        previewMicSource = audioCtx.createBufferSource();
+        previewMicSource.buffer = recordedMicBuffer;
+        previewBgmSource = audioCtx.createBufferSource();
+        previewBgmSource.buffer = bgmBuffer;
 
-    previewGainMic = audioCtx.createGain();
-    previewGainBgm = audioCtx.createGain();
-    
-    updatePreviewVolume();
+        // 音量調整用のノードを作成
+        previewGainMic = audioCtx.createGain();
+        previewGainBgm = audioCtx.createGain();
+        
+        updatePreviewVolume();
 
-    previewMicSource.connect(previewGainMic).connect(audioCtx.destination);
-    previewBgmSource.connect(previewGainBgm).connect(audioCtx.destination);
+        // 接続：音源 -> 音量調整 -> 出力
+        previewMicSource.connect(previewGainMic).connect(audioCtx.destination);
+        previewBgmSource.connect(previewGainBgm).connect(audioCtx.destination);
 
-    const now = audioCtx.currentTime;
-    previewMicSource.start(now);
-    previewBgmSource.start(now);
+        // 同時に再生開始
+        const now = audioCtx.currentTime;
+        previewMicSource.start(now);
+        previewBgmSource.start(now);
 
-    isPreviewPlaying = true;
-    playPreviewBtn.textContent = "■ プレビュー停止";
-    
-    previewMicSource.onended = stopPreview;
+        isPreviewPlaying = true;
+        playPreviewBtn.textContent = "■ プレビュー停止";
+        statusMsgEl.textContent = "PREVIEWING...";
+        
+        // 再生が終わったらボタンを戻す
+        previewMicSource.onended = () => {
+            if (isPreviewPlaying) stopPreview();
+        };
+    } catch (e) {
+        console.error("Preview error:", e);
+        alert("プレビューの再生に失敗しました。");
+    }
 }
 
+/**
+ * ミキサーでのプレビュー再生を停止します。
+ */
 function stopPreview() {
-    if (previewMicSource) { previewMicSource.stop(); previewMicSource = null; }
-    if (previewBgmSource) { previewBgmSource.stop(); previewBgmSource = null; }
+    if (previewMicSource) { try { previewMicSource.stop(); } catch(e){} previewMicSource = null; }
+    if (previewBgmSource) { try { previewBgmSource.stop(); } catch(e){} previewBgmSource = null; }
     isPreviewPlaying = false;
     playPreviewBtn.textContent = "▶ プレビュー再生";
+    statusMsgEl.textContent = "READY TO MIX";
 }
 
 // --- 7. MP3 書き出し (Export) ---
+/**
+ * 録音した声とBGMをミックスしてMP3ファイルを作成します。
+ */
 async function exportMP3() {
     if (!recordedMicBuffer) return;
     stopPreview();
 
-    exportProgressContainer.classList.remove('hidden');
-    exportMp3Btn.disabled = true;
+    try {
+        exportProgressContainer.classList.remove('hidden');
+        exportMp3Btn.disabled = true;
+        statusMsgEl.textContent = "書き出し準備中...";
 
-    // BGMの読み込み
-    const bgmResponse = await fetch(trackElement.src);
-    const bgmArrayBuffer = await bgmResponse.arrayBuffer();
-    const bgmBuffer = await audioCtx.decodeAudioData(bgmArrayBuffer);
+        // BGMの読み込み
+        const bgmResponse = await fetch(trackElement.src);
+        const bgmArrayBuffer = await bgmResponse.arrayBuffer();
+        await initAudioContext();
+        const bgmBuffer = await audioCtx.decodeAudioData(bgmArrayBuffer);
 
-    // オフラインレンダリング (高速ミックス / システムのサンプリングレートに合わせる)
-    const duration = Math.max(recordedMicBuffer.duration, bgmBuffer.duration);
-    const sampleRate = audioCtx.sampleRate;
-    const offlineCtx = new OfflineAudioContext(2, Math.ceil(sampleRate * duration), sampleRate);
+        // オフラインレンダリング（耳には聞こえない超高速なミックス作業）
+        const duration = Math.max(recordedMicBuffer.duration, bgmBuffer.duration);
+        const sampleRate = audioCtx.sampleRate;
+        // 2チャンネル（ステレオ）のキャンバスを用意
+        const offlineCtx = new OfflineAudioContext(2, Math.ceil(sampleRate * duration), sampleRate);
 
-    const micSource = offlineCtx.createBufferSource();
-    micSource.buffer = recordedMicBuffer;
-    const bgmSource = offlineCtx.createBufferSource();
-    bgmSource.buffer = bgmBuffer;
+        const micSource = offlineCtx.createBufferSource();
+        micSource.buffer = recordedMicBuffer;
+        const bgmSource = offlineCtx.createBufferSource();
+        bgmSource.buffer = bgmBuffer;
 
-    const gMic = offlineCtx.createGain();
-    const gBgm = offlineCtx.createGain();
-    gMic.gain.value = parseFloat(mixerMicVol.value);
-    gBgm.gain.value = parseFloat(mixerBgmVol.value);
+        const gMic = offlineCtx.createGain();
+        const gBgm = offlineCtx.createGain();
+        gMic.gain.value = parseFloat(mixerMicVol.value);
+        gBgm.gain.value = parseFloat(mixerBgmVol.value);
 
-    micSource.connect(gMic).connect(offlineCtx.destination);
-    bgmSource.connect(gBgm).connect(offlineCtx.destination);
+        micSource.connect(gMic).connect(offlineCtx.destination);
+        bgmSource.connect(gBgm).connect(offlineCtx.destination);
 
-    micSource.start(0);
-    bgmSource.start(0);
+        micSource.start(0);
+        bgmSource.start(0);
 
-    const renderedBuffer = await offlineCtx.startRendering();
-    
-    // MP3 エンコード (lamejsを使用)
-    encodeToMp3(renderedBuffer);
+        statusMsgEl.textContent = "ミキシング中...";
+        const renderedBuffer = await offlineCtx.startRendering();
+        
+        // MP3 エンコード（実際にファイル形式を変換する）
+        statusMsgEl.textContent = "MP3に変換中...";
+        encodeToMp3(renderedBuffer);
+    } catch (e) {
+        console.error("Export error:", e);
+        alert("書き出しに失敗しました: " + e.message);
+        exportProgressContainer.classList.add('hidden');
+        exportMp3Btn.disabled = false;
+    }
 }
 
+/**
+ * ミックスされた音声データをMP3形式に変換し、ダウンロードさせます。
+ */
 function encodeToMp3(audioBuffer) {
     const channels = 2;
     const sampleRate = audioBuffer.sampleRate;
-    const mp3encoder = new lamejs.Mp3Encoder(channels, sampleRate, 128); // 128kbps で安定性を向上
+    // lamejs というライブラリを使ってMP3を作ります
+    const mp3encoder = new lamejs.Mp3Encoder(channels, sampleRate, 128); 
     const mp3Data = [];
 
     const left = audioBuffer.getChannelData(0);
     const right = audioBuffer.getChannelData(1);
     
-    // Float32 -> Int16 (クリッピングを考慮して堅牢に変換)
+    // パソコンやスマホで扱える形式（Int16）に音を変換します
     const leftInt = new Int16Array(left.length);
     const rightInt = new Int16Array(right.length);
     for (let i = 0; i < left.length; i++) {
+        // 音割れを防ぐ処理
         const sL = Math.max(-1, Math.min(1, left[i]));
         const sR = Math.max(-1, Math.min(1, right[i]));
         leftInt[i] = sL < 0 ? sL * 32768 : sL * 32767;
@@ -397,7 +540,7 @@ function encodeToMp3(audioBuffer) {
         const mp3buf = mp3encoder.encodeBuffer(leftChunk, rightChunk);
         if (mp3buf.length > 0) mp3Data.push(mp3buf);
         
-        // 進捗表示
+        // 画面に進捗（％）を出します
         const progress = Math.round((i / leftInt.length) * 100);
         exportProgressBar.style.width = progress + "%";
         exportPercentEl.textContent = progress + "%";
@@ -406,18 +549,22 @@ function encodeToMp3(audioBuffer) {
     const mp3buf = mp3encoder.flush();
     if (mp3buf.length > 0) mp3Data.push(mp3buf);
 
+    // 完成したデータを「ファイル」としてブラウザに認識させます
     const blob = new Blob(mp3Data, { type: 'audio/mpeg' });
     const url = URL.createObjectURL(blob);
     
-    // ダウンロード実行
+    // 自動でダウンロードを開始します
     const a = document.createElement('a');
     a.href = url;
     a.download = `shuttle_run_mix_${Date.now()}.mp3`;
+    document.body.appendChild(a); // 一時的に追加
     a.click();
+    document.body.removeChild(a);
 
     exportProgressContainer.classList.add('hidden');
     exportMp3Btn.disabled = false;
-    alert("MP3の書き出しが完了しました！♡");
+    statusMsgEl.textContent = "DONE!";
+    alert("MP3の書き出しが完了しました！♡\nファイルを探してみてね。");
 }
 
 // --- 8. ユーティリティ ---
