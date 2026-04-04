@@ -634,3 +634,6 @@ micVolSlider.oninput = updateRealtimeVolume;
 bgmVolSlider.oninput = updateRealtimeVolume;
 // ボタンが見つかったときだけイベントを設定します
 if (monitorMicCheckbox) monitorMicCheckbox.onchange = syncMicMonitoring;
+
+// バージョン情報（デバッグ用）
+console.log("App Version: 1.1 (iOS & Cache Fix)");

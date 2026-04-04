@@ -25,6 +25,12 @@ const presetTracks = [
         title: "お題作成",
         url: "assets/git2.mp3",
         description: "オリジナルのお題を作りたい方はこちら"
+    },
+    {
+        id: "git3",
+        title: "これは動物園です",
+        url: "assets/git3.mp3",
+        description: "人間、犬、猫、猿、豚の順番で鳴いてください"
     }
 ];
 
